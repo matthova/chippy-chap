@@ -1,8 +1,9 @@
-// Peck Party service worker — cache-first app shell so the game keeps
-// working offline (or on flaky cage-side wifi). All paths are relative
-// so it works from a GitHub Pages project subpath.
+// Peck Party service worker — stale-while-revalidate so the game loads
+// instantly (and works offline), while every online visit refreshes the
+// cache in the background so deployed updates actually reach devices.
+// All paths are relative so it works from a GitHub Pages project subpath.
 
-const CACHE = 'peck-party-v1';
+const CACHE = 'peck-party-v2';
 const SHELL = [
   './',
   './index.html',
@@ -32,18 +33,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache same-origin responses so updates picked up online are
-        // available offline next time.
-        if (response.ok && new URL(event.request.url).origin === location.origin) {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      });
-    })
-  );
+  if (new URL(event.request.url).origin !== location.origin) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(event.request);
+    const refresh = fetch(event.request).then((response) => {
+      if (response.ok) cache.put(event.request, response.clone());
+      return response;
+    });
+    if (cached) {
+      // Serve stale immediately; refresh in the background for next load.
+      event.waitUntil(refresh.catch(() => {}));
+      return cached;
+    }
+    return refresh.catch(() => cached);
+  })());
 });

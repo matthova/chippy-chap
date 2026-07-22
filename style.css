@@ -55,6 +55,11 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
   color: #2f3542;
+  /* Undo the game's global peck-proofing inside the panel: inherited
+     user-select:none breaks range-slider dragging on iOS Safari. */
+  -webkit-user-select: auto;
+  user-select: auto;
+  touch-action: auto;
 }
 
 #settings-card h2 {

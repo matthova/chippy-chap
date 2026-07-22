@@ -97,9 +97,13 @@
     const colorIndex = Math.floor(Math.random() * COLORS.length);
     const b = {
       x: rand(r, W - r),
-      y: fromEdge ? H + r * 2 : rand(r, H - r),
+      y: fromEdge ? H + r : rand(r, H - r),
       vx: rand(-0.4, 0.4),
       vy: rand(-0.5, -0.2),
+      // Edge spawns swim up briskly until on screen, then drift normally —
+      // otherwise a replacement can take tens of seconds to reappear.
+      entryVy: fromEdge ? rand(-3.4, -2.4) : 0,
+      entering: fromEdge,
       r,
       colorIndex,
       color: COLORS[colorIndex],
@@ -234,22 +238,43 @@
   }
 
   // A parrot often drags its beak across the screen rather than tapping —
-  // treat a swipe over a bubble as a peck too.
-  const activePointers = new Set();
+  // treat a swipe over a bubble as a peck too. Each active pointer tracks
+  // where it last pecked so a still finger (micro-jitter during the human's
+  // settings hold) doesn't machine-gun pops.
+  const activePointers = new Map();
 
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    activePointers.add(e.pointerId);
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     requestWakeLock();
     handlePeck(e.clientX, e.clientY);
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    if (activePointers.has(e.pointerId)) handlePeck(e.clientX, e.clientY);
+    const last = activePointers.get(e.pointerId);
+    if (!last) return;
+    // A hovering mouse (button already released) must never peck.
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      activePointers.delete(e.pointerId);
+      return;
+    }
+    if (Math.hypot(e.clientX - last.x, e.clientY - last.y) < 8) return;
+    last.x = e.clientX;
+    last.y = e.clientY;
+    handlePeck(e.clientX, e.clientY);
   });
-  const releasePointer = (e) => activePointers.delete(e.pointerId);
-  canvas.addEventListener('pointerup', releasePointer);
-  canvas.addEventListener('pointercancel', releasePointer);
+
+  // Release on window, not the canvas: when the settings overlay opens
+  // beneath a held pointer, or a drag ends off-canvas, the canvas never
+  // sees the pointerup and the id would stay stuck forever.
+  const releasePointer = (e) => {
+    activePointers.delete(e.pointerId);
+    // Touch grants user activation on release, not press — unlocking here
+    // guarantees the very first peck's audio starts as the beak lifts.
+    PeckAudio.unlock();
+  };
+  window.addEventListener('pointerup', releasePointer);
+  window.addEventListener('pointercancel', releasePointer);
 
   // Suppress every browser gesture a beak could trigger: double-tap zoom,
   // pinch zoom, long-press context menu, and legacy touch scrolling.
@@ -274,6 +299,9 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') requestWakeLock();
   });
+  // Wake locks need visibility, not a gesture — grab one at startup so the
+  // tablet doesn't doze off before the bird ever gets its first peck in.
+  requestWakeLock();
 
   // k is the timestep in units of a 60fps frame, so all motion tuned at
   // 60Hz runs the same speed on 120Hz phones and through jank.
@@ -290,16 +318,19 @@
       const b = bubbles[i];
       b.wobblePhase += b.wobbleSpeed * k;
       b.x += (b.vx + Math.sin(b.wobblePhase * 0.7) * 0.25) * spd * k;
-      b.y += b.vy * spd * k;
+      if (b.entering && b.y < H - b.r * 1.4) b.entering = false;
+      b.y += (b.entering ? b.entryVy : b.vy) * spd * k;
       if (b.scale < 1) b.scale = Math.min(1, b.scale + 0.04 * k);
       if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - 0.015 * k);
       // Bounce softly off the side walls.
       if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); }
       if (b.x > W - b.r) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
-      // Drift up and off the top, then float back in from the bottom.
+      // Drift up and off the top, then swim back in from the bottom.
       if (b.y < -b.r * 2) {
-        b.y = H + b.r * 2;
+        b.y = H + b.r;
         b.x = rand(b.r, W - b.r);
+        b.entering = true;
+        b.entryVy = rand(-3.4, -2.4);
       }
     }
 
@@ -345,14 +376,18 @@
     const hueTarget = Math.min(streak, 15) * 9;
     hueShift += (hueTarget - hueShift) * Math.min(0.02 * k, 1);
 
-    // Attract mode cues while the screen sits untouched.
+    // Attract mode cues while the screen sits untouched. Only visible
+    // bubbles are picked — a coo from an offscreen bubble just confuses.
     const now = performance.now();
-    if (now - lastInteraction > ATTRACT_AFTER && now > nextAttractCue && bubbles.length > 0) {
-      const b = bubbles[Math.floor(Math.random() * bubbles.length)];
-      b.pulse = 1;
-      burst(b.x, b.y - b.r, b.color, 5);
-      PeckAudio.coo();
-      nextAttractCue = now + rand(2000, 3500);
+    if (now - lastInteraction > ATTRACT_AFTER && now > nextAttractCue) {
+      const visible = bubbles.filter((b) => b.y - b.r < H && b.y + b.r > 0);
+      if (visible.length > 0) {
+        const b = visible[Math.floor(Math.random() * visible.length)];
+        b.pulse = 1;
+        burst(b.x, b.y - b.r, b.color, 5);
+        PeckAudio.coo();
+        nextAttractCue = now + rand(2000, 3500);
+      }
     }
 
     for (const c of clouds) {

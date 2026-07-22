@@ -21,7 +21,10 @@ const PeckAudio = (() => {
       master.gain.value = volume;
       master.connect(ctx.destination);
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    // Resume on anything that isn't running: 'suspended' before the first
+    // gesture, and WebKit's non-standard 'interrupted' after a call, alarm,
+    // or screen lock on iPad — otherwise the game goes permanently silent.
+    if (ctx.state !== 'running') ctx.resume();
     return ctx;
   }
 

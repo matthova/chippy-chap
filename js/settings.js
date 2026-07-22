@@ -85,6 +85,14 @@ const PeckSettings = (() => {
   let hold = null;
 
   window.addEventListener('pointerdown', (e) => {
+    // Any new touch cancels an in-progress hold. This both fixes a timer
+    // leak (overwriting `hold` orphaned its 3s timer, so a mashing parrot
+    // could accidentally open the panel) and means the hold only completes
+    // for a single, still, uninterrupted press — a human-only gesture.
+    if (hold) {
+      clearTimeout(hold.timer);
+      hold = null;
+    }
     if (isOpen()) return;
     const inZone = e.clientX > window.innerWidth - ZONE && e.clientY > window.innerHeight - ZONE;
     if (!inZone) return;
