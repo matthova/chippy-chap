@@ -1,0 +1,15 @@
+{
+  "name": "Peck Party",
+  "short_name": "Peck Party",
+  "description": "A bubble-popping game designed for parrots — big targets, cheerful chirps, no way to lose.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#87ceeb",
+  "theme_color": "#87ceeb",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

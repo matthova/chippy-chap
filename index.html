@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#87ceeb">
+  <title>Peck Party 🦜</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Human corner: hold this corner for 3 seconds to open settings. -->
+  <div id="corner-hint" aria-hidden="true"></div>
+  <div id="settings" class="hidden">
+    <div id="settings-card">
+      <h2>Human corner</h2>
+      <p class="hint">Hold the bottom-right corner for 3 seconds to get back here.</p>
+      <label>Volume
+        <input type="range" id="set-volume" min="0" max="1" step="0.05">
+      </label>
+      <label>Bubbles
+        <input type="range" id="set-bubbles" min="3" max="14" step="1">
+      </label>
+      <label>Drift speed
+        <input type="range" id="set-speed" min="0.4" max="2" step="0.1">
+      </label>
+      <label>Sky</label>
+      <div id="theme-row">
+        <button class="theme-btn" data-theme="day">☀️ Day</button>
+        <button class="theme-btn" data-theme="sunset">🌅 Sunset</button>
+        <button class="theme-btn" data-theme="twilight">🌙 Twilight</button>
+      </div>
+      <button id="settings-close">Back to the birb</button>
+    </div>
+  </div>
+
+  <script src="./js/audio.js"></script>
+  <script src="./js/settings.js"></script>
+  <script src="./js/game.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support is optional */ });
+      });
+    }
+  </script>
+</body>
+</html>
