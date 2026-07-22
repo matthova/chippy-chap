@@ -18,7 +18,7 @@
     '#00d2d3', // teal
   ];
 
-  const BUBBLE_COUNT = 7;
+  const BUBBLE_COUNT = 7; // fallback if settings are unavailable
   const bubbles = [];
   const particles = [];
   const rings = [];
@@ -65,7 +65,17 @@
     if (fromEdge) PeckAudio.spawn();
   }
 
-  for (let i = 0; i < BUBBLE_COUNT; i++) spawnBubble(false);
+  function targetBubbleCount() {
+    return typeof PeckSettings !== 'undefined'
+      ? Math.round(PeckSettings.get('bubbles'))
+      : BUBBLE_COUNT;
+  }
+
+  function driftSpeed() {
+    return typeof PeckSettings !== 'undefined' ? PeckSettings.get('speed') : 1;
+  }
+
+  for (let i = 0; i < targetBubbleCount(); i++) spawnBubble(false);
 
   // The butterfly: an occasional special guest that flutters across the
   // screen. Catching it earns a melody flourish and a rainbow burst.
@@ -141,7 +151,7 @@
     PeckAudio.pop(b.colorIndex, streak - 1);
     burst(b.x, b.y, b.color, 18);
     rings.push({ x: b.x, y: b.y, r: b.r * 0.6, max: b.r * 2.4, color: b.color, life: 1 });
-    spawnBubble(true);
+    // Replacement bubbles are spawned by the count reconciler in update().
   }
 
   function handlePeck(x, y) {
@@ -209,11 +219,19 @@
   });
 
   function update() {
+    const spd = driftSpeed();
+
+    // Keep the bubble population matched to the settings slider: spawn
+    // replacements from the bottom edge, trim extras one per frame.
+    const target = targetBubbleCount();
+    if (bubbles.length < target) spawnBubble(true);
+    else if (bubbles.length > target) bubbles.pop();
+
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const b = bubbles[i];
       b.wobblePhase += b.wobbleSpeed;
-      b.x += b.vx + Math.sin(b.wobblePhase * 0.7) * 0.25;
-      b.y += b.vy;
+      b.x += (b.vx + Math.sin(b.wobblePhase * 0.7) * 0.25) * spd;
+      b.y += b.vy * spd;
       if (b.scale < 1) b.scale = Math.min(1, b.scale + 0.04);
       if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - 0.015);
       // Bounce softly off the side walls.
@@ -245,7 +263,7 @@
 
     if (butterfly) {
       const bf = butterfly;
-      bf.x += bf.vx;
+      bf.x += bf.vx * spd;
       bf.phase += 0.03;
       bf.wing += 0.35;
       bf.y = bf.baseY + Math.sin(bf.phase * 2.1) * H * 0.06 + Math.sin(bf.phase * 5.3) * 12;

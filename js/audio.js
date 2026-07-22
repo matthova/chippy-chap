@@ -7,6 +7,7 @@
 const PeckAudio = (() => {
   let ctx = null;
   let master = null;
+  let volume = 0.6;
 
   // C major pentatonic across two octaves — nothing here can sound sour.
   const SCALE = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0];
@@ -17,7 +18,7 @@ const PeckAudio = (() => {
       if (!AC) return null;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.6;
+      master.gain.value = volume;
       master.connect(ctx.destination);
     }
     if (ctx.state === 'suspended') ctx.resume();
@@ -127,8 +128,8 @@ const PeckAudio = (() => {
   }
 
   function setVolume(v) {
-    if (!ctx) ensureContext();
-    if (master) master.gain.value = Math.max(0, Math.min(1, v));
+    volume = Math.max(0, Math.min(1, v));
+    if (master) master.gain.value = volume;
   }
 
   // A soft, quiet chirp used by attract mode to catch the bird's ear
