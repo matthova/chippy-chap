@@ -82,6 +82,29 @@ html, body {
   accent-color: #1e90ff;
 }
 
+#theme-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.theme-btn {
+  flex: 1;
+  padding: 10px 4px;
+  border: 2px solid #dfe4ea;
+  border-radius: 12px;
+  background: #f1f2f6;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2f3542;
+  cursor: pointer;
+}
+
+.theme-btn.active {
+  border-color: #1e90ff;
+  background: #e3f1ff;
+}
+
 #settings-close {
   display: block;
   width: 100%;

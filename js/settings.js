@@ -5,13 +5,18 @@
 
 const PeckSettings = (() => {
   const KEY = 'peck-party-settings';
-  const DEFAULTS = { volume: 0.6, bubbles: 7, speed: 1 };
+  const THEMES = ['day', 'sunset', 'twilight'];
+  const DEFAULTS = { volume: 0.6, bubbles: 7, speed: 1, theme: 'day' };
   const values = { ...DEFAULTS };
 
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
     for (const k of Object.keys(DEFAULTS)) {
-      if (typeof saved[k] === 'number' && isFinite(saved[k])) values[k] = saved[k];
+      if (typeof DEFAULTS[k] === 'number') {
+        if (typeof saved[k] === 'number' && isFinite(saved[k])) values[k] = saved[k];
+      } else if (k === 'theme' && THEMES.includes(saved[k])) {
+        values[k] = saved[k];
+      }
     }
   } catch (err) { /* private browsing etc. — defaults are fine */ }
 
@@ -43,8 +48,22 @@ const PeckSettings = (() => {
   // Sync the audio engine with the persisted volume at startup.
   PeckAudio.setVolume(values.volume);
 
+  const themeButtons = Array.from(document.querySelectorAll('.theme-btn'));
+  function refreshThemeButtons() {
+    for (const btn of themeButtons) {
+      btn.classList.toggle('active', btn.dataset.theme === values.theme);
+    }
+  }
+  for (const btn of themeButtons) {
+    btn.addEventListener('click', () => {
+      set('theme', btn.dataset.theme);
+      refreshThemeButtons();
+    });
+  }
+
   function open() {
     for (const [k, input] of Object.entries(inputs)) input.value = values[k];
+    refreshThemeButtons();
     panel.classList.remove('hidden');
   }
 

@@ -18,6 +18,55 @@
     '#00d2d3', // teal
   ];
 
+  // Sky themes. Hues are HSL triples so the melody-streak hue drift can
+  // ride on top of any theme.
+  const THEMES = {
+    day:      { top: [197, 71, 73], bottom: [203, 100, 89], stars: false, cloud: 'rgba(255, 255, 255, 0.85)' },
+    sunset:   { top: [265, 45, 48], bottom: [24, 100, 68],  stars: false, cloud: 'rgba(255, 214, 189, 0.75)' },
+    twilight: { top: [232, 45, 16], bottom: [258, 38, 34],  stars: true,  cloud: null },
+  };
+
+  function currentTheme() {
+    const name = typeof PeckSettings !== 'undefined' ? PeckSettings.get('theme') : 'day';
+    return THEMES[name] || THEMES.day;
+  }
+
+  // Clouds and stars are decorations regenerated on resize.
+  const clouds = [];
+  const stars = [];
+
+  function makeDecorations() {
+    clouds.length = 0;
+    for (let i = 0; i < 4; i++) {
+      const scale = rand(0.5, 1.1) * Math.min(W, H) / 6;
+      const puffs = [];
+      for (let j = 0; j < 5; j++) {
+        puffs.push({
+          dx: (j - 2) * scale * 0.55 + rand(-scale * 0.15, scale * 0.15),
+          dy: rand(-scale * 0.2, scale * 0.2),
+          r: scale * rand(0.45, 0.75) * (1 - Math.abs(j - 2) * 0.18),
+        });
+      }
+      clouds.push({
+        x: rand(0, W),
+        y: rand(H * 0.05, H * 0.45),
+        v: rand(0.08, 0.25),
+        scale,
+        puffs,
+      });
+    }
+    stars.length = 0;
+    for (let i = 0; i < 42; i++) {
+      stars.push({
+        x: rand(0, W),
+        y: rand(0, H * 0.75),
+        r: rand(0.8, 2.2),
+        phase: rand(0, Math.PI * 2),
+        speed: rand(0.01, 0.04),
+      });
+    }
+  }
+
   const BUBBLE_COUNT = 7; // fallback if settings are unavailable
   const bubbles = [];
   const particles = [];
@@ -30,9 +79,9 @@
     canvas.width = W * DPR;
     canvas.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    makeDecorations();
   }
   window.addEventListener('resize', resize);
-  resize();
 
   function rand(a, b) { return a + Math.random() * (b - a); }
 
@@ -74,6 +123,9 @@
   function driftSpeed() {
     return typeof PeckSettings !== 'undefined' ? PeckSettings.get('speed') : 1;
   }
+
+  // Initial layout must run after all decoration state above is declared.
+  resize();
 
   for (let i = 0; i < targetBubbleCount(); i++) spawnBubble(false);
 
@@ -290,6 +342,12 @@
       PeckAudio.coo();
       nextAttractCue = now + rand(2000, 3500);
     }
+
+    for (const c of clouds) {
+      c.x += c.v * spd;
+      if (c.x - c.scale * 2.5 > W) c.x = -c.scale * 2.5;
+    }
+    for (const s of stars) s.phase += s.speed;
   }
 
   function drawBubble(b) {
@@ -399,11 +457,36 @@
   }
 
   function draw() {
+    const theme = currentTheme();
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, `hsl(${197 + hueShift}, 71%, 73%)`);
-    sky.addColorStop(1, `hsl(${203 + hueShift}, 100%, 89%)`);
+    const [th, ts, tl] = theme.top;
+    const [bh, bs, bl] = theme.bottom;
+    sky.addColorStop(0, `hsl(${th + hueShift}, ${ts}%, ${tl}%)`);
+    sky.addColorStop(1, `hsl(${bh + hueShift}, ${bs}%, ${bl}%)`);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
+
+    if (theme.stars) {
+      for (const s of stars) {
+        ctx.globalAlpha = 0.35 + Math.abs(Math.sin(s.phase)) * 0.65;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff8e1';
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    if (theme.cloud) {
+      ctx.fillStyle = theme.cloud;
+      for (const c of clouds) {
+        for (const p of c.puffs) {
+          ctx.beginPath();
+          ctx.arc(c.x + p.dx, c.y + p.dy, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
 
     for (const ring of rings) {
       ctx.globalAlpha = Math.max(ring.life, 0) * 0.7;
