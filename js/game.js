@@ -108,9 +108,46 @@
     if (best >= 0) popBubble(bubbles[best], best);
   }
 
+  // A parrot often drags its beak across the screen rather than tapping —
+  // treat a swipe over a bubble as a peck too.
+  const activePointers = new Set();
+
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    activePointers.add(e.pointerId);
+    requestWakeLock();
     handlePeck(e.clientX, e.clientY);
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (activePointers.has(e.pointerId)) handlePeck(e.clientX, e.clientY);
+  });
+  const releasePointer = (e) => activePointers.delete(e.pointerId);
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+
+  // Suppress every browser gesture a beak could trigger: double-tap zoom,
+  // pinch zoom, long-press context menu, and legacy touch scrolling.
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('dblclick', (e) => e.preventDefault());
+  window.addEventListener('gesturestart', (e) => e.preventDefault());
+  canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+  canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+  // Keep the screen awake while the bird plays. Wake locks are released by
+  // the OS when the tab is hidden, so re-request on return.
+  let wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator) || wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (err) {
+      // Denied (e.g. low battery) — the game plays fine regardless.
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
   });
 
   function update() {
