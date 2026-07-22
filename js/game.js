@@ -26,9 +26,9 @@
     twilight: { top: [232, 45, 16], bottom: [258, 38, 34],  stars: true,  cloud: null },
   };
 
-  function currentTheme() {
+  function currentThemeName() {
     const name = typeof PeckSettings !== 'undefined' ? PeckSettings.get('theme') : 'day';
-    return THEMES[name] || THEMES.day;
+    return THEMES[name] ? name : 'day';
   }
 
   // Clouds and stars are decorations regenerated on resize.
@@ -70,6 +70,7 @@
   const BUBBLE_COUNT = 7; // fallback if settings are unavailable
   const bubbles = [];
   const particles = [];
+  const particlePool = []; // recycled particle objects to avoid GC churn
   const rings = [];
 
   function resize() {
@@ -162,21 +163,25 @@
 
   function burst(x, y, color, count) {
     for (let i = 0; i < count; i++) {
+      // Cap the particle population so a frenzy of pecks can't tank an
+      // old tablet's frame rate.
+      if (particles.length >= 280) return;
       const angle = (Math.PI * 2 * i) / count + rand(-0.25, 0.25);
       const speed = rand(1.5, 5);
       const sparkle = Math.random() < 0.45;
-      particles.push({
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - rand(0, 1),
-        r: sparkle ? rand(4, 9) : rand(3, 7),
-        color: sparkle && Math.random() < 0.5 ? '#ffffff' : color,
-        life: 1,
-        decay: rand(0.018, 0.032),
-        sparkle,
-        spin: rand(-0.15, 0.15),
-        angle: rand(0, Math.PI * 2),
-      });
+      const p = particlePool.pop() || {};
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(angle) * speed;
+      p.vy = Math.sin(angle) * speed - rand(0, 1);
+      p.r = sparkle ? rand(4, 9) : rand(3, 7);
+      p.color = sparkle && Math.random() < 0.5 ? '#ffffff' : color;
+      p.life = 1;
+      p.decay = rand(0.018, 0.032);
+      p.sparkle = sparkle;
+      p.spin = rand(-0.15, 0.15);
+      p.angle = rand(0, Math.PI * 2);
+      particles.push(p);
     }
   }
 
@@ -270,7 +275,9 @@
     if (document.visibilityState === 'visible') requestWakeLock();
   });
 
-  function update() {
+  // k is the timestep in units of a 60fps frame, so all motion tuned at
+  // 60Hz runs the same speed on 120Hz phones and through jank.
+  function update(k) {
     const spd = driftSpeed();
 
     // Keep the bubble population matched to the settings slider: spawn
@@ -281,11 +288,11 @@
 
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const b = bubbles[i];
-      b.wobblePhase += b.wobbleSpeed;
-      b.x += (b.vx + Math.sin(b.wobblePhase * 0.7) * 0.25) * spd;
-      b.y += b.vy * spd;
-      if (b.scale < 1) b.scale = Math.min(1, b.scale + 0.04);
-      if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - 0.015);
+      b.wobblePhase += b.wobbleSpeed * k;
+      b.x += (b.vx + Math.sin(b.wobblePhase * 0.7) * 0.25) * spd * k;
+      b.y += b.vy * spd * k;
+      if (b.scale < 1) b.scale = Math.min(1, b.scale + 0.04 * k);
+      if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - 0.015 * k);
       // Bounce softly off the side walls.
       if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); }
       if (b.x > W - b.r) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
@@ -298,26 +305,31 @@
 
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.07;
-      p.angle += p.spin;
-      p.life -= p.decay;
-      if (p.life <= 0) particles.splice(i, 1);
+      p.x += p.vx * k;
+      p.y += p.vy * k;
+      p.vy += 0.07 * k;
+      p.angle += p.spin * k;
+      p.life -= p.decay * k;
+      if (p.life <= 0) {
+        // Swap-remove keeps this O(1); draw order of dots doesn't matter.
+        particles[i] = particles[particles.length - 1];
+        particles.pop();
+        particlePool.push(p);
+      }
     }
 
     for (let i = rings.length - 1; i >= 0; i--) {
       const ring = rings[i];
-      ring.r += (ring.max - ring.r) * 0.14;
-      ring.life -= 0.045;
+      ring.r += (ring.max - ring.r) * Math.min(0.14 * k, 1);
+      ring.life -= 0.045 * k;
       if (ring.life <= 0) rings.splice(i, 1);
     }
 
     if (butterfly) {
       const bf = butterfly;
-      bf.x += bf.vx * spd;
-      bf.phase += 0.03;
-      bf.wing += 0.35;
+      bf.x += bf.vx * spd * k;
+      bf.phase += 0.03 * k;
+      bf.wing += 0.35 * k;
       bf.y = bf.baseY + Math.sin(bf.phase * 2.1) * H * 0.06 + Math.sin(bf.phase * 5.3) * 12;
       if ((bf.vx > 0 && bf.x > W + bf.size * 3) || (bf.vx < 0 && bf.x < -bf.size * 3)) {
         butterfly = null;
@@ -331,7 +343,7 @@
     // fade gracefully back to the base sky.
     if (performance.now() - lastPopTime > STREAK_WINDOW) streak = 0;
     const hueTarget = Math.min(streak, 15) * 9;
-    hueShift += (hueTarget - hueShift) * 0.02;
+    hueShift += (hueTarget - hueShift) * Math.min(0.02 * k, 1);
 
     // Attract mode cues while the screen sits untouched.
     const now = performance.now();
@@ -344,10 +356,10 @@
     }
 
     for (const c of clouds) {
-      c.x += c.v * spd;
+      c.x += c.v * spd * k;
       if (c.x - c.scale * 2.5 > W) c.x = -c.scale * 2.5;
     }
-    for (const s of stars) s.phase += s.speed;
+    for (const s of stars) s.phase += s.speed * k;
   }
 
   function drawBubble(b) {
@@ -456,14 +468,24 @@
     ctx.restore();
   }
 
+  // The sky gradient only changes when the theme, streak hue, or screen
+  // height changes — cache it instead of rebuilding every frame.
+  let skyKey = '';
+  let skyGrad = null;
+
   function draw() {
-    const theme = currentTheme();
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    const [th, ts, tl] = theme.top;
-    const [bh, bs, bl] = theme.bottom;
-    sky.addColorStop(0, `hsl(${th + hueShift}, ${ts}%, ${tl}%)`);
-    sky.addColorStop(1, `hsl(${bh + hueShift}, ${bs}%, ${bl}%)`);
-    ctx.fillStyle = sky;
+    const themeName = currentThemeName();
+    const theme = THEMES[themeName];
+    const key = `${themeName}|${hueShift.toFixed(1)}|${H}`;
+    if (key !== skyKey) {
+      skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+      const [th, ts, tl] = theme.top;
+      const [bh, bs, bl] = theme.bottom;
+      skyGrad.addColorStop(0, `hsl(${th + hueShift}, ${ts}%, ${tl}%)`);
+      skyGrad.addColorStop(1, `hsl(${bh + hueShift}, ${bs}%, ${bl}%)`);
+      skyKey = key;
+    }
+    ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, W, H);
 
     if (theme.stars) {
@@ -516,10 +538,29 @@
     ctx.globalAlpha = 1;
   }
 
-  function frame() {
-    update();
+  // Run at the display's rate with delta-time, and stop entirely while
+  // the tab is hidden to save battery.
+  let rafId = null;
+  let lastFrameTime = 0;
+
+  function frame(t) {
+    if (!lastFrameTime) lastFrameTime = t;
+    // Clamp so a background stall doesn't produce one giant leap.
+    const k = Math.min((t - lastFrameTime) / (1000 / 60), 3);
+    lastFrameTime = t;
+    update(k);
     draw();
-    requestAnimationFrame(frame);
+    rafId = requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  rafId = requestAnimationFrame(frame);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = null;
+    } else if (rafId === null) {
+      lastFrameTime = 0;
+      rafId = requestAnimationFrame(frame);
+    }
+  });
 })();
