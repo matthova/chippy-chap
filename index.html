@@ -9,6 +9,9 @@
   <meta name="theme-color" content="#87ceeb">
   <title>Peck Party 🦜</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -41,5 +44,12 @@
   <script src="./js/audio.js"></script>
   <script src="./js/settings.js"></script>
   <script src="./js/game.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support is optional */ });
+      });
+    }
+  </script>
 </body>
 </html>
