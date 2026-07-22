@@ -89,12 +89,13 @@ const PeckAudio = (() => {
 
   const VOICES = [chirp, whistle, bell, marimba];
 
-  // Pop sound for a bubble: color decides the voice and the note.
-  function pop(colorIndex) {
+  // Pop sound for a bubble: color decides the voice; the note can climb
+  // with the player's streak so fast pecking plays a rising melody.
+  function pop(colorIndex, noteIndex) {
     const c = ensureContext();
     if (!c) return;
     const voice = VOICES[((colorIndex % VOICES.length) + VOICES.length) % VOICES.length];
-    voice(detune(note(colorIndex)));
+    voice(detune(note(noteIndex === undefined ? colorIndex : noteIndex)));
   }
 
   // A quiet, low "bloop" when a new bubble floats in. Only plays once the

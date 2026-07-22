@@ -116,9 +116,21 @@
     }
   }
 
+  // Melody streak: pops within a few seconds of each other climb the
+  // pentatonic ladder, so rapid pecking plays a rising song. The sky's
+  // hue drifts along with the streak.
+  const STREAK_WINDOW = 4000;
+  let streak = 0;
+  let lastPopTime = -Infinity;
+  let hueShift = 0;
+
   function popBubble(b, index) {
     bubbles.splice(index, 1);
-    PeckAudio.pop(b.colorIndex);
+    const now = performance.now();
+    if (now - lastPopTime > STREAK_WINDOW) streak = 0;
+    streak++;
+    lastPopTime = now;
+    PeckAudio.pop(b.colorIndex, streak - 1);
     burst(b.x, b.y, b.color, 18);
     rings.push({ x: b.x, y: b.y, r: b.r * 0.6, max: b.r * 2.4, color: b.color, life: 1 });
     spawnBubble(true);
@@ -234,6 +246,12 @@
     } else if (performance.now() > nextButterflyAt) {
       spawnButterfly();
     }
+
+    // Ease the sky hue toward the current streak, and let lapsed streaks
+    // fade gracefully back to the base sky.
+    if (performance.now() - lastPopTime > STREAK_WINDOW) streak = 0;
+    const hueTarget = Math.min(streak, 15) * 9;
+    hueShift += (hueTarget - hueShift) * 0.02;
   }
 
   function drawBubble(b) {
@@ -343,8 +361,8 @@
 
   function draw() {
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#87ceeb');
-    sky.addColorStop(1, '#c9ecff');
+    sky.addColorStop(0, `hsl(${197 + hueShift}, 71%, 73%)`);
+    sky.addColorStop(1, `hsl(${203 + hueShift}, 100%, 89%)`);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
