@@ -1,6 +1,8 @@
 // Peck Party audio — everything is synthesized with the Web Audio API.
 // No assets, no loading. All pitches live on a pentatonic scale so any
-// combination of pops sounds pleasant.
+// combination of pops sounds pleasant. Each bubble color has its own voice
+// (chirp, whistle, bell, marimba), so the parrot learns that different
+// colors make different sounds.
 
 const PeckAudio = (() => {
   let ctx = null;
@@ -22,27 +24,87 @@ const PeckAudio = (() => {
     return ctx;
   }
 
-  // A short cheerful chirp: a sine that sweeps up and rings out.
-  function pop(noteIndex) {
-    const c = ensureContext();
-    if (!c) return;
-    const now = c.currentTime;
-    const freq = SCALE[((noteIndex % SCALE.length) + SCALE.length) % SCALE.length];
+  function ready() {
+    return ctx && ctx.state === 'running';
+  }
 
-    const osc = c.createOscillator();
-    const gain = c.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq * 0.75, now);
-    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.06);
-    osc.frequency.exponentialRampToValueAtTime(freq, now + 0.12);
+  function note(index) {
+    return SCALE[((index % SCALE.length) + SCALE.length) % SCALE.length];
+  }
 
+  // Small random detune keeps repeated pops from sounding machine-stamped.
+  function detune(freq) {
+    return freq * (1 + (Math.random() - 0.5) * 0.03);
+  }
+
+  function tone(freq, { type = 'sine', attack = 0.015, decay = 0.35, peak = 0.5, delay = 0 } = {}) {
+    const now = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.5, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-
+    gain.gain.exponentialRampToValueAtTime(peak, now + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + attack + decay);
     osc.connect(gain).connect(master);
     osc.start(now);
-    osc.stop(now + 0.4);
+    osc.stop(now + attack + decay + 0.05);
+    return osc;
+  }
+
+  // Voice 0 — chirp: a bright sine that swoops up and settles, like a budgie.
+  function chirp(freq) {
+    const now = ctx.currentTime;
+    const osc = tone(freq, { peak: 0.5, decay: 0.3 });
+    osc.frequency.setValueAtTime(freq * 0.7, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.05);
+    osc.frequency.exponentialRampToValueAtTime(freq, now + 0.11);
+  }
+
+  // Voice 1 — whistle: a longer, wavering note with vibrato.
+  function whistle(freq) {
+    const now = ctx.currentTime;
+    const osc = tone(freq * 1.5, { peak: 0.35, attack: 0.03, decay: 0.5 });
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value = 7;
+    lfoGain.gain.value = freq * 0.04;
+    lfo.connect(lfoGain).connect(osc.frequency);
+    lfo.start(now);
+    lfo.stop(now + 0.6);
+  }
+
+  // Voice 2 — bell: a fundamental plus shimmering inharmonic partials.
+  function bell(freq) {
+    tone(freq, { peak: 0.4, decay: 0.6 });
+    tone(freq * 2.4, { peak: 0.12, decay: 0.45 });
+    tone(freq * 3.9, { peak: 0.06, decay: 0.3 });
+  }
+
+  // Voice 3 — marimba: short, woody, percussive.
+  function marimba(freq) {
+    tone(freq, { type: 'triangle', peak: 0.55, attack: 0.008, decay: 0.22 });
+    tone(freq * 4, { type: 'sine', peak: 0.1, attack: 0.005, decay: 0.08 });
+  }
+
+  const VOICES = [chirp, whistle, bell, marimba];
+
+  // Pop sound for a bubble: color decides the voice and the note.
+  function pop(colorIndex) {
+    const c = ensureContext();
+    if (!c) return;
+    const voice = VOICES[((colorIndex % VOICES.length) + VOICES.length) % VOICES.length];
+    voice(detune(note(colorIndex)));
+  }
+
+  // A quiet, low "bloop" when a new bubble floats in. Only plays once the
+  // context is unlocked — browsers block audio before the first gesture.
+  function spawn() {
+    if (!ready()) return;
+    const now = ctx.currentTime;
+    const osc = tone(120, { peak: 0.12, attack: 0.02, decay: 0.18 });
+    osc.frequency.setValueAtTime(90, now);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 0.15);
   }
 
   // Mobile browsers require a user gesture before audio can play; the game
@@ -51,5 +113,10 @@ const PeckAudio = (() => {
     ensureContext();
   }
 
-  return { pop, unlock };
+  function setVolume(v) {
+    if (!ctx) ensureContext();
+    if (master) master.gain.value = Math.max(0, Math.min(1, v));
+  }
+
+  return { pop, spawn, unlock, setVolume, ready };
 })();

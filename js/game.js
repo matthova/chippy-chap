@@ -55,6 +55,7 @@
       birth: performance.now(),
     };
     bubbles.push(b);
+    if (fromEdge) PeckAudio.spawn();
   }
 
   for (let i = 0; i < BUBBLE_COUNT; i++) spawnBubble(false);
