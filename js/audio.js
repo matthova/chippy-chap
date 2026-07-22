@@ -131,5 +131,16 @@ const PeckAudio = (() => {
     if (master) master.gain.value = Math.max(0, Math.min(1, v));
   }
 
-  return { pop, spawn, flourish, unlock, setVolume, ready };
+  // A soft, quiet chirp used by attract mode to catch the bird's ear
+  // without startling it. Skipped entirely until audio is unlocked.
+  function coo() {
+    if (!ready()) return;
+    const now = ctx.currentTime;
+    const freq = note(Math.floor(Math.random() * 5) + 3);
+    const osc = tone(freq, { peak: 0.12, attack: 0.04, decay: 0.4 });
+    osc.frequency.setValueAtTime(freq * 0.85, now);
+    osc.frequency.exponentialRampToValueAtTime(freq, now + 0.15);
+  }
+
+  return { pop, spawn, flourish, coo, unlock, setVolume, ready };
 })();

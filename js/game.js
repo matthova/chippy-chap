@@ -58,6 +58,8 @@
       wobbleSpeed: rand(0.02, 0.045),
       // Bubbles grow in rather than blink in.
       scale: fromEdge ? 1 : 0,
+      // Attract-mode pulse, decays after each cue.
+      pulse: 0,
     };
     bubbles.push(b);
     if (fromEdge) PeckAudio.spawn();
@@ -124,6 +126,12 @@
   let lastPopTime = -Infinity;
   let hueShift = 0;
 
+  // Attract mode: after a quiet stretch, bubbles take turns pulsing and
+  // shedding soft sparkles with a gentle chirp to lure the bird back.
+  const ATTRACT_AFTER = 12000;
+  let lastInteraction = performance.now();
+  let nextAttractCue = 0;
+
   function popBubble(b, index) {
     bubbles.splice(index, 1);
     const now = performance.now();
@@ -138,6 +146,7 @@
 
   function handlePeck(x, y) {
     PeckAudio.unlock();
+    lastInteraction = performance.now();
     // The butterfly is the prize — check it first, with an extra-generous
     // hit radius since it moves.
     if (butterfly && Math.hypot(butterfly.x - x, butterfly.y - y) < butterfly.size * 1.8) {
@@ -206,6 +215,7 @@
       b.x += b.vx + Math.sin(b.wobblePhase * 0.7) * 0.25;
       b.y += b.vy;
       if (b.scale < 1) b.scale = Math.min(1, b.scale + 0.04);
+      if (b.pulse > 0) b.pulse = Math.max(0, b.pulse - 0.015);
       // Bounce softly off the side walls.
       if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); }
       if (b.x > W - b.r) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
@@ -252,12 +262,23 @@
     if (performance.now() - lastPopTime > STREAK_WINDOW) streak = 0;
     const hueTarget = Math.min(streak, 15) * 9;
     hueShift += (hueTarget - hueShift) * 0.02;
+
+    // Attract mode cues while the screen sits untouched.
+    const now = performance.now();
+    if (now - lastInteraction > ATTRACT_AFTER && now > nextAttractCue && bubbles.length > 0) {
+      const b = bubbles[Math.floor(Math.random() * bubbles.length)];
+      b.pulse = 1;
+      burst(b.x, b.y - b.r, b.color, 5);
+      PeckAudio.coo();
+      nextAttractCue = now + rand(2000, 3500);
+    }
   }
 
   function drawBubble(b) {
     const wob = 1 + Math.sin(b.wobblePhase) * 0.04;
-    const rx = b.r * b.scale * wob;
-    const ry = b.r * b.scale * (2 - wob);
+    const pulseBoost = 1 + Math.sin(b.pulse * Math.PI) * 0.16;
+    const rx = b.r * b.scale * wob * pulseBoost;
+    const ry = b.r * b.scale * (2 - wob) * pulseBoost;
 
     ctx.save();
     ctx.translate(b.x, b.y);
