@@ -107,6 +107,18 @@ const PeckAudio = (() => {
     osc.frequency.exponentialRampToValueAtTime(180, now + 0.15);
   }
 
+  // Celebration for catching the butterfly: a quick ascending pentatonic
+  // arpeggio of bell tones.
+  function flourish() {
+    const c = ensureContext();
+    if (!c) return;
+    for (let i = 0; i < 5; i++) {
+      const f = note(3 + i * 2);
+      tone(f, { peak: 0.35, decay: 0.5, delay: i * 0.09 });
+      tone(f * 2.4, { peak: 0.09, decay: 0.35, delay: i * 0.09 });
+    }
+  }
+
   // Mobile browsers require a user gesture before audio can play; the game
   // calls this from the first peck.
   function unlock() {
@@ -118,5 +130,5 @@ const PeckAudio = (() => {
     if (master) master.gain.value = Math.max(0, Math.min(1, v));
   }
 
-  return { pop, spawn, unlock, setVolume, ready };
+  return { pop, spawn, flourish, unlock, setVolume, ready };
 })();

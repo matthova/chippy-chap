@@ -65,6 +65,37 @@
 
   for (let i = 0; i < BUBBLE_COUNT; i++) spawnBubble(false);
 
+  // The butterfly: an occasional special guest that flutters across the
+  // screen. Catching it earns a melody flourish and a rainbow burst.
+  let butterfly = null;
+  let nextButterflyAt = performance.now() + rand(15000, 30000);
+
+  function spawnButterfly() {
+    const fromLeft = Math.random() < 0.5;
+    const size = bubbleRadius() * 0.65;
+    butterfly = {
+      x: fromLeft ? -size * 2 : W + size * 2,
+      baseY: rand(H * 0.15, H * 0.6),
+      y: 0,
+      vx: (fromLeft ? 1 : -1) * rand(1.4, 2.2),
+      size,
+      phase: rand(0, Math.PI * 2),
+      wing: rand(0, Math.PI * 2),
+      hue: rand(0, 360),
+    };
+  }
+
+  function catchButterfly() {
+    PeckAudio.flourish();
+    // Rainbow burst: sparkles in every bubble color.
+    for (let i = 0; i < COLORS.length; i++) {
+      burst(butterfly.x, butterfly.y, COLORS[i], 4);
+    }
+    rings.push({ x: butterfly.x, y: butterfly.y, r: butterfly.size, max: butterfly.size * 4, color: '#ffffff', life: 1 });
+    butterfly = null;
+    nextButterflyAt = performance.now() + rand(20000, 45000);
+  }
+
   function burst(x, y, color, count) {
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + rand(-0.25, 0.25);
@@ -95,6 +126,12 @@
 
   function handlePeck(x, y) {
     PeckAudio.unlock();
+    // The butterfly is the prize — check it first, with an extra-generous
+    // hit radius since it moves.
+    if (butterfly && Math.hypot(butterfly.x - x, butterfly.y - y) < butterfly.size * 1.8) {
+      catchButterfly();
+      return;
+    }
     // Pop the bubble nearest the peck, with a forgiving hit radius.
     let best = -1, bestDist = Infinity;
     for (let i = 0; i < bubbles.length; i++) {
@@ -183,6 +220,20 @@
       ring.life -= 0.045;
       if (ring.life <= 0) rings.splice(i, 1);
     }
+
+    if (butterfly) {
+      const bf = butterfly;
+      bf.x += bf.vx;
+      bf.phase += 0.03;
+      bf.wing += 0.35;
+      bf.y = bf.baseY + Math.sin(bf.phase * 2.1) * H * 0.06 + Math.sin(bf.phase * 5.3) * 12;
+      if ((bf.vx > 0 && bf.x > W + bf.size * 3) || (bf.vx < 0 && bf.x < -bf.size * 3)) {
+        butterfly = null;
+        nextButterflyAt = performance.now() + rand(15000, 35000);
+      }
+    } else if (performance.now() > nextButterflyAt) {
+      spawnButterfly();
+    }
   }
 
   function drawBubble(b) {
@@ -248,6 +299,48 @@
     ctx.restore();
   }
 
+  function drawButterfly(bf) {
+    const flap = Math.sin(bf.wing);
+    const s = bf.size;
+    ctx.save();
+    ctx.translate(bf.x, bf.y);
+    if (bf.vx < 0) ctx.scale(-1, 1);
+    ctx.rotate(Math.sin(bf.phase * 2.1) * 0.15);
+
+    // Wings: two pairs of ellipses that fold with the flap.
+    const wingScale = 0.35 + Math.abs(flap) * 0.65;
+    const wingColor = `hsl(${bf.hue}, 90%, 65%)`;
+    const wingColor2 = `hsl(${(bf.hue + 40) % 360}, 90%, 72%)`;
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.scale(1, side);
+      ctx.fillStyle = wingColor;
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.05, -s * 0.5 * wingScale, s * 0.55, s * 0.62 * wingScale, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = wingColor2;
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.3, -s * 0.38 * wingScale, s * 0.34, s * 0.42 * wingScale, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Body and antennae.
+    ctx.fillStyle = '#4a3728';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.5, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#4a3728';
+    ctx.lineWidth = 2;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * 0.45, side * s * 0.05);
+      ctx.quadraticCurveTo(s * 0.75, side * s * 0.3, s * 0.85, side * s * 0.22);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw() {
     const sky = ctx.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, '#87ceeb');
@@ -266,6 +359,8 @@
     ctx.globalAlpha = 1;
 
     for (const b of bubbles) drawBubble(b);
+
+    if (butterfly) drawButterfly(butterfly);
 
     for (const p of particles) {
       ctx.globalAlpha = Math.max(p.life, 0);
