@@ -7,6 +7,8 @@ built to be hosted on GitHub Pages.
 
 ## Play
 
+Play the game [here](https://matthova.github.io/chippy-chap/)
+
 Enable GitHub Pages for this repo (Settings → Pages → Source: **GitHub Actions**)
 and the included workflow deploys `main` automatically. Then open the page on a
 phone or tablet, tap once (the first tap unlocks audio), and hand it to the bird.
